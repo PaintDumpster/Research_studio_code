@@ -1,7 +1,11 @@
+#Import Libraries
 import pandas as pd
 import random
 import json
+import import_ipynb
 import os
+
+#Import Scripts
 
 pd.set_option('display.max_columns', None)
 
@@ -15,6 +19,10 @@ materials_df['max_thickness'] = materials_df['max_thickness'].astype(float)
 materials_df['conductivity'] = materials_df['conductivity'].astype(float)
 materials_df['embodied_carbon_coefficient'] = materials_df['embodied_carbon_coefficient'].astype(float)
 materials_df['cost'] = materials_df['cost'].astype(float)
+materials_df['recyclability'] = materials_df['recyclability'].astype(int)
+materials_df['bio_based'] = materials_df['bio_based'].astype(bool)
+materials_df['responsible'] = materials_df['responsible'].astype(bool)
+materials_df['preserved'] = materials_df['preserved'].astype(bool)
 
 # Function to create a wall with unique properties
 def create_wall(wall_id, total_wall_area, wall_options, materials_df, outside_temp, inside_temp):
@@ -27,8 +35,16 @@ def create_wall(wall_id, total_wall_area, wall_options, materials_df, outside_te
         'total_u_value': 0,
         'total_embodied_carbon': 0,
         'heat_transfer': 0,
-        'total_cost': 0
+        'total_cost': 0,
+        'construction_demolition_waste': 0,
+        'circular_economy': 0,
+        'heritage_preservation': 0
     }
+    preserved_masses = []
+    total_masses = []
+    circular_masses = []
+    responsible_sourcing_values = []
+    preservation_values = []
 
     for material_type in wall_type:
         filtered_materials = materials_df[materials_df['material type'] == material_type]
@@ -36,6 +52,39 @@ def create_wall(wall_id, total_wall_area, wall_options, materials_df, outside_te
         material_thickness = round(random.uniform(selected_material['min_thickness'], selected_material['max_thickness']), 3)
         r_value = round(material_thickness / selected_material['conductivity'], 3)
         u_value = round(1 / r_value, 3)
+
+        material_mass = selected_material['density'] * material_thickness * total_wall_area
+        total_masses.append(material_mass)
+
+        if selected_material['recyclability'] == 5:
+            preserved_mass = material_mass
+        elif selected_material['recyclability'] == 4:
+            preserved_mass = 0.75 * material_mass
+        elif selected_material['recyclability'] == 3:
+            preserved_mass = 0.5 * material_mass
+        else:
+            preserved_mass = 0 * material_mass
+
+        preserved_masses.append(preserved_mass)
+
+        if selected_material['bio_based']:
+            circular_mass = material_mass
+        elif selected_material['recyclability'] == 5:
+            circular_mass = material_mass
+        elif selected_material['recyclability'] == 4:
+            circular_mass = 0.75 * material_mass
+        elif selected_material['recyclability'] == 3:
+            circular_mass = 0.5 * material_mass
+        else:
+            circular_mass = 0
+
+        circular_masses.append(circular_mass)
+
+        responsible_sourcing_value = 100 if selected_material['responsible'] else 0
+        responsible_sourcing_values.append(responsible_sourcing_value)
+
+        preservation_value = 100 if selected_material['preserved'] else 0
+        preservation_values.append(preservation_value)
 
         material_data = {
             'material': selected_material['material'],
@@ -58,6 +107,14 @@ def create_wall(wall_id, total_wall_area, wall_options, materials_df, outside_te
         wall['heat_transfer'] = round((outside_temp - inside_temp) / wall['total_r_value'], 3)
         wall['total_cost'] = round(wall['total_cost'] + selected_material['cost'] * total_wall_area, 3)
 
+    total_mass = sum(total_masses)
+    preserved_mass_total = sum(preserved_masses)
+    circular_mass_total = sum(circular_masses)
+
+    wall['construction_demolition_waste'] = round((preserved_mass_total / total_mass) * 100, 2) if total_mass > 0 else 0
+    wall['circular_economy'] = round((circular_mass_total / total_mass) * 100, 2) if total_mass > 0 else 0
+    wall['responsible_material_sourcing'] = round(sum(responsible_sourcing_values)/len(responsible_sourcing_values),2) if responsible_sourcing_values else 0
+    wall['heritage_preservation'] = round(sum(preservation_values)/ len(preservation_values),2) if preservation_values else 0
     return wall
 
 # Get user inputs
@@ -83,8 +140,15 @@ while len(wall_population) < num_walls:
 # Create a DataFrame from the wall population
 wall_population_df = pd.DataFrame(wall_population)
 
+# Normalize 'total_embodied_carbon' and compute 'embodied_ghg_emissions' and 'Affordable_adoption_high-quality_housing_conditions'
+max_embodied_carbon = wall_population_df['total_embodied_carbon'].max()
+max_cost = wall_population_df['total_cost'].max()
+
+wall_population_df['embodied_ghg_emissions'] = wall_population_df['total_embodied_carbon'].apply(lambda x: round((1 - (x / max_embodied_carbon)) * 100, 2) if max_embodied_carbon > 0 else 0)
+wall_population_df['affordable_adoption_high-quality_housing_conditions'] = wall_population_df['total_cost'].apply(lambda x: round((1 - (x / max_cost)) * 100, 2) if max_cost > 0 else 0)
+
 # Print the DataFrame
-print(wall_population_df.head().to_string())
+print(wall_population_df.head(20).to_string())
 
 # Save the DataFrame to a CSV file
 '''path = "datasets"
@@ -99,6 +163,12 @@ def convert_types(df):
     df['total_embodied_carbon'] = df['total_embodied_carbon'].astype(float)
     df['heat_transfer'] = df['heat_transfer'].astype(float)
     df['total_cost'] = df['total_cost'].astype(float)
+    df['construction_demolition_waste'] = df['construction_demolition_waste'].astype(float)
+    df['circular_economy'] = df['circular_economy'].astype(float)
+    df['heritage_preservation'] = df['heritage_preservation'].astype(float)
+    df['responsible_material_sourcing'] = df['responsible_material_sourcing'].astype(float)
+    df['embodied_ghg_emissions'] = df['embodied_ghg_emissions'].astype(float)
+    df['affordable_adoption_high-quality_housing_conditions'] = df['affordable_adoption_high-quality_housing_conditions'].astype(float)
     return df
 
 
@@ -137,7 +207,13 @@ def dataframe_to_json(df):
             "total_u_value": float(row['total_u_value']),
             "total_embodied_carbon": float(row['total_embodied_carbon']),
             "heat_transfer": float(row['heat_transfer']),
-            "total_cost": float(row['total_cost'])
+            "total_cost": float(row['total_cost']),
+            "construction_demolition_waste": float(row['construction_demolition_waste']),
+            "circular_economy": float(row['circular_economy']),
+            "heritage_preservation": float(row['heritage_preservation']),
+            "responsible_material_sourcing": float(row['responsible_material_sourcing']),
+            "embodied_ghg_emissions": float(row['embodied_ghg_emissions']),
+            "affordable_adoption_high-quality_housing_conditions": float(row['affordable_adoption_high-quality_housing_conditions'])
         }
         json_list.append(json_row)
 
