@@ -7,7 +7,6 @@ import os
 
 #Import Scripts
 
-
 pd.set_option('display.max_columns', None)
 
 # Load materials from the CSV
