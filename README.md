@@ -1,4 +1,4 @@
-# NEBuilder: An AI-Driven Sustainability Design Assistant
+# WALLE: An AI-Driven Sustainability Design Assistant
 
 ## 🌍 Overview
 NEBuilder is a platform inspired by the New European Bauhaus (NEB) initiative. It bridges complex sustainability guidelines with practical design implementation using graph-based tools and generative AI.
